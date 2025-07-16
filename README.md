@@ -1,57 +1,43 @@
 /**
- * Dynamic Custom Pathfinding Algorithm
- * - Returns multiple paths to different goal nodes
- * - Enables dynamic ranking by cost, distance, reliability, etc.
- * - Builds on the existing Node and buildGraph structure
+ * rankPaths.js
+ * 
+ * Ranks paths from dynamicPathFinder by different strategies:
+ * - Closest to user
+ * - Closest to destination
+ * - Cheapest (lowest total cost)
+ * - Most reliable (lowest unreliability score)
  */
 
-import { getTimePenalty, getDistance, calculatePriority, smartHeuristic } from "./heuristics";
+import { getDistance } from "./heuristics";
 
-export function dynamicPathFinder(startNode, goalNodes, options = {}) {
-  const queue = [{ node: startNode, cost: 0 }];
-  const visited = new Set();
-  const cameFrom = {};
-  const costSoFar = { [startNode.id]: 0 };
-  const hour = new Date().getHours();
-  const foundPaths = [];
+export function rankPaths(paths, userLocation, destinationLocation) {
+  const ranked = {
+    closestToUser: [...paths].sort((a, b) => {
+      const aDist = getDistance(userLocation.lat, userLocation.lng, a.goal.lat, a.goal.lng);
+      const bDist = getDistance(userLocation.lat, userLocation.lng, b.goal.lat, b.goal.lng);
+      return aDist - bDist;
+    }),
 
-  while (queue.length > 0) {
-    queue.sort((a, b) => a.cost - b.cost);
-    const { node: current } = queue.shift();
+    closestToDestination: [...paths].sort((a, b) => {
+      const aDist = getDistance(destinationLocation.lat, destinationLocation.lng, a.goal.lat, a.goal.lng);
+      const bDist = getDistance(destinationLocation.lat, destinationLocation.lng, b.goal.lat, b.goal.lng);
+      return aDist - bDist;
+    }),
 
-    if (visited.has(current.id)) continue;
-    visited.add(current.id);
+    cheapest: [...paths].sort((a, b) => a.totalCost - b.totalCost),
 
-    const matchingGoal = goalNodes.find((goal) => goal.id === current.id);
-    if (matchingGoal) {
-      let path = [current];
-      let totalCost = costSoFar[current.id];
-      while (cameFrom[path[0].id]) {
-        path.unshift(cameFrom[path[0].id]);
-      }
-      foundPaths.push({ path, goal: current, totalCost });
-      continue; // Continue exploring other paths
-    }
+    secondClosestToUser: [],
+    secondClosestToDestination: [],
+  };
 
-    for (const edge of current.edges) {
-      const neighbor = edge.node;
-      const newCost = costSoFar[current.id] + edge.weight;
-      const unreliability = 0.3; // Placeholder — could use actual value
-      const heuristic = smartHeuristic(
-        neighbor,
-        goalNodes[0], // heuristic is relative; all goals assumed close
-        unreliability,
-        getTimePenalty(hour)
-      );
-      const priority = calculatePriority(newCost, heuristic, 1.1);
+  // Optionally add second closest as separate ranks
+  ranked.secondClosestToUser = ranked.closestToUser[1] ? [ranked.closestToUser[1]] : [];
+  ranked.secondClosestToDestination = ranked.closestToDestination[1] ? [ranked.closestToDestination[1]] : [];
 
-      if (!(neighbor.id in costSoFar) || newCost < costSoFar[neighbor.id]) {
-        costSoFar[neighbor.id] = newCost;
-        cameFrom[neighbor.id] = current;
-        queue.push({ node: neighbor, cost: priority });
-      }
-    }
-  }
-
-  return foundPaths;
+  return ranked;
 }
+
+// Usage example:
+// const ranked = rankPaths(paths, userLocation, destinationLocation);
+// ranked.closestToUser[0] => Best path by proximity to user
+// ranked.cheapest[0] => Lowest cost path
