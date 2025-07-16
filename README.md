@@ -1,60 +1,17 @@
-/**
- * rankPaths.js (updated)
- * 
- * Ranks paths from dynamicPathFinder using real-world driving metrics:
- * - Closest to user (driving duration)
- * - Closest to destination (driving duration)
- * - Cheapest (total weighted cost)
- * - Most reliable (lowest unreliability, if tracked)
- */
-
-export function rankPaths(paths, userLocation, destinationLocation) {
-  const ranked = {
-    closestToUser: [...paths].sort((a, b) => {
-      const aTime = a.goal.drivingMinutesFromUser || a.totalCost;
-      const bTime = b.goal.drivingMinutesFromUser || b.totalCost;
-      return aTime - bTime;
-    }),
-
-    closestToDestination: [...paths].sort((a, b) => {
-      const aTime = a.goal.drivingMinutesFromDestination || a.totalCost;
-      const bTime = b.goal.drivingMinutesFromDestination || b.totalCost;
-      return aTime - bTime;
-    }),
-
-    cheapest: [...paths].sort((a, b) => a.totalCost - b.totalCost),
-
-    secondClosestToUser: [],
-    secondClosestToDestination: []
-  };
-
-  ranked.secondClosestToUser = ranked.closestToUser[1] ? [ranked.closestToUser[1]] : [];
-  ranked.secondClosestToDestination = ranked.closestToDestination[1] ? [ranked.closestToDestination[1]] : [];
-
-  return ranked;
-}
-
-// NOTE: To enable driving-based ranking:
-// In buildGraph(), set:
-//   node.drivingMinutesFromUser = drivingData.durationInTrafficMin
-//   node.drivingMinutesFromDestination = await getDrivingData(node.lat, node.lng, dest.lat, dest.lng).durationInTrafficMin
-
-
-
-
-
-
-
-
-
-
-
 import React, { useEffect, useState } from "react";
 import { dynamicPathFinder } from "../utils/dynamicPathFinder";
 import { rankPaths } from "../utils/rankPaths";
 import { buildGraph } from "../utils/buildGraph";
 import MapView from "./MapView";
-import Select from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Select, SelectItem, SelectTrigger, SelectValue, SelectContent } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 
 export default function RouteOptionsPanel({ userLocation, nearbySpots, destinationLocation }) {
   const [paths, setPaths] = useState([]);
@@ -77,38 +34,51 @@ export default function RouteOptionsPanel({ userLocation, nearbySpots, destinati
     loadPaths();
   }, [userLocation, nearbySpots, destinationLocation]);
 
-  const handleRankTypeChange = (e) => {
-    const value = e.target.value;
+  const handleRankTypeChange = (value: string) => {
     setSelectedRankType(value);
     const newPath = rankedPaths[value]?.[0];
     if (newPath) setActivePath(newPath);
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
-      <div className="md:col-span-2">
+    <div className="flex flex-col md:flex-row gap-4 p-4">
+      <div className="flex-1">
         <MapView path={activePath?.path} />
       </div>
 
-      <div className="md:col-span-1 bg-white rounded-2xl p-4 shadow">
-        <h2 className="text-xl font-semibold mb-2">Select Route Option</h2>
-        <select value={selectedRankType} onChange={handleRankTypeChange} className="w-full p-2 rounded border">
-          <option value="closestToUser">Closest to Me</option>
-          <option value="secondClosestToUser">2nd Closest to Me</option>
-          <option value="closestToDestination">Closest to Destination</option>
-          <option value="secondClosestToDestination">2nd Closest to Destination</option>
-          <option value="cheapest">Cheapest Option</option>
-        </select>
+      <Sheet>
+        <SheetTrigger asChild>
+          <Button variant="default" className="mt-4 md:mt-0">View Route Options</Button>
+        </SheetTrigger>
+        <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+          <SheetHeader>
+            <SheetTitle>Select Route Option</SheetTitle>
+          </SheetHeader>
 
-        {activePath && (
           <div className="mt-4">
-            <h3 className="font-medium">Selected Route Summary:</h3>
-            <p><strong>Goal Spot:</strong> {activePath.goal.id}</p>
-            <p><strong>Total Cost:</strong> {activePath.totalCost.toFixed(2)}</p>
-            <p><strong>Spots in Path:</strong> {activePath.path.map(p => p.id).join(" → ")}</p>
+            <Select value={selectedRankType} onValueChange={handleRankTypeChange}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a route" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="closestToUser">Closest to Me</SelectItem>
+                <SelectItem value="secondClosestToUser">2nd Closest to Me</SelectItem>
+                <SelectItem value="closestToDestination">Closest to Destination</SelectItem>
+                <SelectItem value="secondClosestToDestination">2nd Closest to Destination</SelectItem>
+                <SelectItem value="cheapest">Cheapest Option</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {activePath && (
+              <div className="mt-6 text-sm space-y-2">
+                <div><strong>Goal Spot:</strong> {activePath.goal.id}</div>
+                <div><strong>Total Cost:</strong> {activePath.totalCost.toFixed(2)}</div>
+                <div><strong>Spots in Path:</strong> {activePath.path.map(p => p.id).join(" → ")}</div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
