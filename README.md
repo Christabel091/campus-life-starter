@@ -1,130 +1,329 @@
-import { Link } from "react-router-dom";
-import "../styles/pages.css";
+/** @format */
+import "../styles/Home.css";
+import { useNavigate } from "react-router-dom";
+import Body from "./Body";
+import { useRef, useEffect, useState, use } from "react";
+import { buildGraph } from "../utils/Huristic";
+import DestSearch from "./DestSearch";
+import { dynamicPathFinder } from "../utils/Huristic";
+import { rankPaths } from "../utils/RankPath";
+import { getDistance } from "../utils/Huristic";
+import { formatTime } from "../utils/formatTime";
+import { useMap } from "./MapContext";
+import MakeReservation from "./MakeReservation";
+import MapLoading from "./MapLoading";
+const RouteDetails = ({
+  spots,
+  setSpots,
+  setSelectedSpot,
+  setShowModal,
+  setActive,
+  activeFilters,
+  locked,
+  setLocked,
+  lockedSpotId,
+  setLockedSpotId,
+  setFreeCount,
+  destinationLocation,
+  setDestinationLocation,
+  setIsRoutingToHome,
+  searchKeyword,
+  setSearchKeyword,
+  isReserveBtnClicked,
+  setIsReserveBtnClicked,
+}) => {
+  const navigate = useNavigate();
+  //for production
+  const userLocation = useRef({
+    lat: 35.8457602,
+    lng: -86.3789569,
+  }).current;
+  const { map } = useMap();
+  const directionsService = useRef(new window.google.maps.DirectionsService());
+  const [loaded, setLoaded] = useState(true);
+  const [mode, setMode] = useState("user-to-spot");
+  const [routePath, setRoutePath] = useState([]);
+  const [endLocation, setEndLocation] = useState(null);
+  const [stats, setStats] = useState({});
+  const [isDriving, setIsDriving] = useState(true);
+  const [heading, setHeading] = useState(0);
+  const [reserved, setReserved] = useState(false);
+  const [showMakeReservation, setShowMakeReservation] = useState(false);
+  const [noReservationCnt, setNoReservationCnt] = useState(0);
+  const [activePath, setActivePath] = useState(null);
+  const [rankedPaths, setRankedPaths] = useState([]);
+  const [selectedRankType, setSelectedRankType] = useState("");
+  const [eta, setEta] = useState(0);
+  const [paths, setPaths] = useState([]);
+  const [freeSpots, setFreeSpots] = useState([]);
+  const [rankBy, setRankBy] = useState(false);
+  const [sortBy, setSortBy] = useState(false);
 
-const Welcome = () => {
+  const fetchSpotsCloseToDestination = async () => {
+    let tempSpots = [];
+    let radius = 200;
+    while (tempSpots.length < 1) {
+      const response = await fetch(
+        `http://localhost:3000/map/spots?lat=${destinationLocation.lat}&lng=${destinationLocation.lng}&radius=${radius}`
+      );
+      const data = await response.json();
+      if (!data || data.length < 1) {
+        radius += 200;
+        continue;
+      }
+      tempSpots = data;
+      const nearByFreeSpots = data.filter((spot) => !spot.isOccupied);
+      setFreeSpots(nearByFreeSpots);
+      return nearByFreeSpots;
+    }
+  };
+
+  const loadPaths = async (nearByFreeSpots, value) => {
+    const { userNode, spotNodes } = await buildGraph(
+      userLocation,
+      nearByFreeSpots,
+      destinationLocation
+    );
+    const allPaths = dynamicPathFinder(userNode, spotNodes);
+    setPaths(allPaths);
+    const ranked = rankPaths(allPaths, userLocation, destinationLocation);
+    setRankedPaths(ranked);
+
+    const bestPath = ranked[value]?.[0];
+    if (bestPath) {
+      setActivePath(bestPath);
+      getGoogleDirections(
+        userLocation,
+        bestPath.path[bestPath.path.length - 1],
+        isDriving
+      );
+      setEndLocation(bestPath.path[bestPath.path.length - 1]);
+      setLoaded(true);
+    }
+  };
+  useEffect(() => {
+    console.log(endLocation);
+  }, [endLocation]);
+  const handleRankTypeChange = async (e) => {
+    setLoaded(false);
+    const value = e.target.value;
+    setSelectedRankType(value);
+    let nearByFreeSpots = [];
+    if (value.includes("Destination")) {
+      nearByFreeSpots = await fetchSpotsCloseToDestination();
+    } else {
+      nearByFreeSpots = spots.filter((spot) => !spot.isOccupied);
+      setFreeSpots(nearByFreeSpots);
+    }
+    loadPaths(nearByFreeSpots, value);
+  };
+  useEffect(() => {
+    if (eta > 0 && eta <= 600 && noReservationCnt < 3) {
+      setShowMakeReservation(true);
+    }
+  }, [eta]);
+
+  useEffect(() => {
+    if (reserved) {
+      const spot = spots.find(
+        (spot) =>
+          spot.coordLat === endLocation.lat && spot.coordLng === endLocation.lng
+      );
+      if (spot) {
+        setSelectedSpot(spot);
+        setSearchKeyword(spot.lotName);
+        navigate("/Home/ReserveDetails");
+        setTimeout(() => {
+          setIsReserveBtnClicked(true);
+        }, 2000);
+        setReserved(false);
+      }
+    }
+  }, [reserved]);
+
+  const computeStats = (path) => {
+    if (!path || path.length < 2) return { totalDistance: 0, eta: 0 };
+    let distance = 0;
+    for (let i = 1; i < path.length; i++) {
+      distance += getDistance(
+        path[i - 1].lat,
+        path[i - 1].lng,
+        path[i].lat,
+        path[i].lng
+      );
+    }
+    distance = distance * 1000;
+    let speed = isDriving ? 10 : 1.4;
+    const currentHour = new Date().getHours();
+    speed *= getSpeedWithMutiplier(currentHour);
+    speed = (speed * 1000) / 3600;
+    const etaSeconds = Math.round(distance / speed);
+    setEta(etaSeconds);
+    return {
+      totalDistance: `${Math.round(distance)}m`,
+      eta: formatTime(etaSeconds),
+      accuracy: "90%",
+    };
+  };
+
+  const getSpeedWithMutiplier = (hour) => {
+    if (hour >= 7 && hour < 11) return 0.6;
+    if (hour >= 11 && hour < 14) return 0.8;
+    return 1;
+  };
+
+  const getGoogleDirections = (start, end, isDriving) => {
+    directionsService.current.route(
+      {
+        origin: start,
+        destination: end,
+        travelMode: isDriving
+          ? google.maps.TravelMode.DRIVING
+          : google.maps.TravelMode.WALKING,
+      },
+      (result, status) => {
+        if (status === "OK") {
+          const route = result.routes[0].overview_path.map((point) => ({
+            lat: point.lat(),
+            lng: point.lng(),
+          }));
+
+          setRoutePath([...route, end]);
+          return setStats(computeStats(route));
+        } else {
+          throw new Error("Directions request failed due to " + status);
+        }
+      }
+    );
+  };
+
+  const handleToggle = () => {
+    setIsDriving(!isDriving);
+    getGoogleDirections(userLocation, endLocation, isDriving);
+  };
   return (
-    <div className="overlay">
-      <div className="welcome-page spotOn">
-        <h1 className="logo-title">SpotOn</h1>
-        <p className="tagline">Revolutionizing campus parking, one spot at a time.</p>
-        <p className="description">
-          Discover, reserve, and park smarter. Say goodbye to circling lots.
-        </p>
-
-        <ul className="features">
-          <li>🔍 Search for nearby parking in real-time</li>
-          <li>📍 Navigate directly to available spots</li>
-          <li>🛡️ Reserve with confidence — no guesswork</li>
-        </ul>
-
-        <div className="button-group">
-          <Link to="/signup">
-            <button className="btn-start">Get Started</button>
-          </Link>
-          <Link to="/login">
-            <button className="btn-start secondary">Log In</button>
-          </Link>
+    <>
+      <div className="route-header">
+        <div className="header-icon">
+          <i
+            className="fa fa-arrow-left fa-2x go-back"
+            aria-hidden="true"
+            onClick={() => {
+              setIsRoutingToHome(true);
+              navigate("/");
+            }}
+          ></i>
+        </div>
+        <div className="header-text">
+          <p>Find best route to your spot</p>
+          <p>Your spot, yur way</p>
         </div>
       </div>
-    </div>
+
+      <div className="site-main">
+        <div className="route-filter">
+          {<DestSearch onSelect={(loc) => setDestinationLocation(loc)} />}
+          <div className="filter-button">
+            <button className="fab-rotate">Rotate Map</button>
+            <button className="walk" onClick={handleToggle}>
+              <i className="fas fa-car"></i>
+              <p>Driiving</p>
+            </button>
+            <button className="walk" onClick={handleToggle}>
+              <i className="fas fa-walking"></i>
+              <p>walking</p>
+            </button>
+            <button>Hide seen spots</button>
+            <div className="site-select">
+              <div onClick={() => setRankBy(!rankBy)}>
+                <p>Rank spots by:{rankBy ? "▼" : "▶"}</p>
+              </div>
+            </div>
+          </div>
+          {rankBy && (
+            <div className="rank-options">
+              <p value="closestToUser" onClick={() => setSortBy(true)}>
+                closest to you
+              </p>
+              <p value="closestToDestination" onClick={() => setSortBy(true)}>
+                Closest to destination
+              </p>
+              <p value="cheapest" onClick={() => setSortBy(false)}>
+                All Cheapest
+              </p>
+            </div>
+          )}
+          {sortBy && (
+            <div className="rank-options-sort">
+              <p>Sort By: </p>
+              <p>Distance</p>
+              <p>Distance</p>
+            </div>
+          )}
+          <button>
+            <p>Rank</p>
+          </button>
+        </div>
+        {loaded ? (
+          <Body
+            mode="route"
+            routeMode={mode}
+            name={"Your Smart Router"}
+            spots={spots}
+            setSpots={setSpots}
+            setSelectedSpot={setSelectedSpot}
+            setShowModal={setShowModal}
+            setActive={setActive}
+            activeFilters={activeFilters}
+            userLocation={userLocation}
+            locked={locked}
+            setLocked={setLocked}
+            lockedSpotId={lockedSpotId}
+            setLockedSpotId={setLockedSpotId}
+            setFreeCount={setFreeCount}
+            routePath={routePath}
+            destinationLocation={destinationLocation}
+            endLocation={endLocation}
+            heading={heading}
+            setSearchKeyword={setSearchKeyword}
+            setIsReserveBtnClicked={setIsReserveBtnClicked}
+          />
+        ) : (
+          <MapLoading />
+        )}
+      </div>
+      <div className="route-summary">
+        <div className="route-summary-header">
+          <h2>Your navigation to </h2>
+        </div>
+        <div className="route-summary-body">
+          <div className="route-summary-item">
+            <p>distance</p>
+            <h2>{stats.totalDistance}</h2>
+          </div>
+
+          <div className="route-summary-item">
+            <p>ETA</p>
+            <h2>{stats.eta}</h2>
+          </div>
+
+          <div className="route-summary-item">
+            <p>Accuracy</p>
+            <h2>99%</h2>
+          </div>
+        </div>
+        {showMakeReservation && (
+          <MakeReservation
+            setReserve={setReserved}
+            setShowMakeReservation={setShowMakeReservation}
+            noReservationCnt={noReservationCnt}
+            setNoReservationCnt={setNoReservationCnt}
+            id={endLocation?.id}
+            spots={spots}
+          />
+        )}
+      </div>
+    </>
   );
 };
-
-export default Welcome;
-
-
-
-
-
-.overlay {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 1rem;
-  z-index: 100;
-  background: linear-gradient(45deg, #1c2e46 0%, #7c94b4 100%);
-}
-
-.welcome-page {
-  text-align: center;
-  max-width: 600px;
-  margin: 2rem auto;
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 3rem 2rem;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
-  animation: drop 0.6s ease-out forwards;
-}
-
-@keyframes drop {
-  0% {
-    opacity: 0;
-    transform: translateY(-80px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.logo-title {
-  font-size: 3.5rem;
-  color: #1c2e46;
-  margin-bottom: 0.5rem;
-}
-
-.tagline {
-  font-size: 1.4rem;
-  color: #444;
-  margin-bottom: 1rem;
-  font-weight: 600;
-}
-
-.description {
-  font-size: 1.1rem;
-  color: #666;
-  margin-bottom: 2rem;
-}
-
-.features {
-  list-style: none;
-  padding: 0;
-  margin-bottom: 2rem;
-  color: #555;
-  font-size: 1rem;
-  line-height: 1.6;
-}
-
-.button-group {
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.btn-start {
-  padding: 0.75rem 1.5rem;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #fff;
-  background: linear-gradient(45deg, #1c2e46 0%, #7c94b4 100%);
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.btn-start:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-}
-
-.btn-start.secondary {
-  background: #555;
-}
-
-.btn-start.secondary:hover {
-  background: #333;
-}
+export default RouteDetails;
