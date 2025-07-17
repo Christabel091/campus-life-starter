@@ -1,13 +1,16 @@
-const RouteControls = ({ onToggleTravelMode, onHideSeen, isDriving }) => (
-  <div className="route-filter">
-    <DestSearch onSelect={(loc) => setDestinationLocation(loc)} />
-    <div className="filter-button">
-      <button>Rotate Map</button>
-      <button onClick={onToggleTravelMode}>
-        <i className={`fas fa-${isDriving ? "car" : "walking"}`}></i>
-        <p>{isDriving ? "Driving" : "Walking"}</p>
-      </button>
-      <button onClick={onHideSeen}>Hide seen spots</button>
-    </div>
+{rankedPaths[selectedRankType]?.slice(0, 5).map((path, index) => (
+  <div
+    key={index}
+    className="ranked-spot-item"
+    onClick={() => {
+      setActivePath(path);
+      getGoogleDirections(userLocation, path.path[path.path.length - 1], isDriving);
+      setEndLocation(path.path[path.path.length - 1]);
+    }}
+  >
+    <p>Lot: {path.goal.lotName}</p>
+    <p>Distance: {Math.round(path.totalDistance)}m</p>
+    <p>ETA: {Math.round(path.goal.drivingMinutesFromUser)} min</p>
+    <p>Price: ${path.totalPrice}</p>
   </div>
-);
+))}
