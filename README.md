@@ -1,12 +1,33 @@
-// RouteHeader.jsx
-export default function RouteHeader({ onBack }) {
+// TopSpotsList.jsx
+import React from 'react';
+
+const TopSpotsList = ({ rankedPaths, onSelect }) => {
+  if (!rankedPaths || !rankedPaths.length) return null;
+
   return (
-    <div className="route-header">
-      <i className="fa fa-arrow-left go-back" onClick={onBack}></i>
-      <div>
-        <p>Find best route to your spot</p>
-        <p>Your spot, your way</p>
-      </div>
+    <div className="top-spots-list">
+      {rankedPaths.slice(0, 5).map((path, idx) => (
+        <div key={idx} className="spot-item" onClick={() => onSelect(path)}>
+          <h4>{path.goal?.lotName || `Spot ${idx + 1}`}</h4>
+          <p>${path.totalPrice}/hr — ETA: {path.goal?.drivingMinutesFromUser} mins</p>
+        </div>
+      ))}
     </div>
   );
-}
+};
+
+export default TopSpotsList;
+
+
+// RankSelector.jsx
+import React from 'react';
+
+const RankSelector = ({ onChange }) => (
+  <div className="rank-options">
+    <p onClick={() => onChange('closestToUser')}>Closest to You</p>
+    <p onClick={() => onChange('closestToDestination')}>Closest to Destination</p>
+    <p onClick={() => onChange('cheapest')}>Cheapest</p>
+  </div>
+);
+
+export default RankSelector;
