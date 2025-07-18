@@ -112,3 +112,16 @@
   <i className="fas fa-walking"></i>
   <p>Walking</p>
 </button>
+
+
+
+
+.walk.active-toggle {
+  background-color: #007bff;
+  color: #fff;
+  border-color: #007bff;
+}
+
+.walk.active-toggle:hover {
+  background-color: #0056b3;
+}
