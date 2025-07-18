@@ -1,42 +1,146 @@
+<div className="route-filter">
+          {<DestSearch onSelect={(loc) => setDestinationLocation(loc)} />}
+          <div className="filter-button">
+            <button className="fab-rotate">Rotate Map</button>
 
+            <button
+              className={`walk ${isDriving ? "active-toggle" : ""}`}
+              onClick={handleToggle}
+            >
+              <i className="fas fa-car"></i>
+              <p>Driving</p>
+            </button>
 
+            <button
+              className={`walk ${!isDriving ? "active-toggle" : ""}`}
+              onClick={handleToggle}
+            >
+              <i className="fas fa-walking"></i>
+              <p>Walking</p>
+            </button>
+            <label>
+              <input
+                type="checkbox"
+                checked={hideViewed}
+                className="ranked-spot-checkbox"
+                onChange={(e) => {
+                  setHideViewed(!hideViewed);
+                }}
+              />
+              Hide previously shown spots
+            </label>
+            <div className="site-select">
+              <div
+                onClick={() => {
+                  setRankBy(!rankBy);
+                  setSortBy(null);
+                }}
+              >
+                <p>Rank spots by:{rankBy ? "▼" : "▶"}</p>
+              </div>
+            </div>
+          </div>
+          {rankBy && (
+            <div className="rank-options">
+              <p
+                onClick={() => {
+                  setSortBy("distance");
+                  setRankValue("closestToUser");
+                }}
+              >
+                closest to you
+              </p>
+              <p
+                value="closestToDestination"
+                onClick={() => {
+                  setSortBy("distance");
+                  setRankValue("closestToDestination");
+                }}
+              >
+                Closest to destination
+              </p>
+              <p
+                value="cheapest"
+                onClick={() => {
+                  setSortBy("price");
+                  setRankValue("cheapest");
+                }}
+              >
+                All Cheapest
+              </p>
+            </div>
+          )}
+          {sortBy && sortBy === "distance" && (
+            <div className="rank-options-sort">
+              <p>Sort By: </p>
+              <p
+                onClick={() => {
+                  setSortByValue("price");
+                }}
+              >
+                Price
+              </p>
+              <p
+                onClick={() => {
+                  setSortByValue("None");
+                }}
+              >
+                None
+              </p>
+            </div>
+          )}
 
+          {sortBy && sortBy === "price" && (
+            <div className="rank-options-sort">
+              <p
+                onClick={() => {
+                  setSortByValue("DistanceToUser");
+                }}
+              >
+                closest to you
+              </p>
 
-
-
-
-
-
-
-
-
-
-
-  .skeleton-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 1rem;
-}
-
-.skeleton-spot-card {
-  height: 60px;
-  border-radius: 10px;
-  background: linear-gradient(
-    90deg,
-    #f0f0f0 25%,
-    #e0e0e0 37%,
-    #f0f0f0 63%
-  );
-  background-size: 400% 100%;
-  animation: shimmer 1.2s ease-in-out infinite;
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: -400px 0;
-  }
-  100% {
-    background-position: 400px 0;
-  }
-}
+              <p
+                onClick={() => {
+                  setSortByValue("DistanceToDest");
+                }}
+              >
+                closest to your destination
+              </p>
+              <p
+                onClick={() => {
+                  setSortByValue("None");
+                }}
+              >
+                None
+              </p>
+            </div>
+          )}
+          <button onClick={handleRankTypeChange}>
+            <p>Rank</p>
+          </button>
+          <p>{error}</p>
+        </div>
+        {!loaded && (
+          <div className="skeleton-wrapper">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div key={index} className="skeleton-spot-card" />
+            ))}
+          </div>
+        )}
+        {showRouteList &&
+          loaded &&
+          rankPathChoosen?.slice(0, 5).map((path, index) => (
+            <div
+              key={index}
+              className="ranked-spot-item"
+              onClick={() => showRoute(path)}
+            >
+              <p>
+                Lot: {spots.find((spot) => spot.id === path.goal.id)?.lotName}
+              </p>
+              <p>Distance: {Math.round(path.totalDistance)}m</p>
+              <p>ETA: {Math.round(path.goal.drivingMinutesFromUser)} min</p>
+              <p>Price: ${path.totalPrice}</p>
+            </div>
+          ))}
