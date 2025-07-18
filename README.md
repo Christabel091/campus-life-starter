@@ -1,8 +1,4 @@
- <div className="skeleton-wrapper">
-    {Array.from({ length: 5 }).map((_, index) => (
-      <div key={index} className="skeleton-spot-card" />
-    ))}
-  </div> 
+
 
 
 
