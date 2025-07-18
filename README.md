@@ -94,3 +94,21 @@
   margin: 4px 0;
   font-size: 14px;
 }
+
+
+
+<button
+  className={`walk ${isDriving ? "active-toggle" : ""}`}
+  onClick={handleToggle}
+>
+  <i className="fas fa-car"></i>
+  <p>Driving</p>
+</button>
+
+<button
+  className={`walk ${!isDriving ? "active-toggle" : ""}`}
+  onClick={handleToggle}
+>
+  <i className="fas fa-walking"></i>
+  <p>Walking</p>
+</button>
